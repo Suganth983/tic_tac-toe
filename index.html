@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tic‑Tac‑Toe — Modern UI</title>
+  <style>
+    :root{
+      --bg: #0d1117;
+      --panel: #161b22;
+      --muted: #8b949e;
+      --text: #f0f6fc;
+      --accent: #58a6ff;
+      --accent-2: #2ea043;
+      --danger: #f85149;
+      --ring: rgba(88,166,255,.45);
+      --shadow: 0 8px 24px rgba(0,0,0,.4);
+    }
+    [data-theme="light"]{
+      --bg:#f6f8fa;--panel:#ffffff;--text:#24292f;--muted:#57606a;--ring:rgba(88,166,255,.35);
+      --shadow:0 6px 18px rgba(140,149,159,.2);
+    }
+    *{box-sizing:border-box; margin:0; padding:0;}
+    body{
+      display:flex; justify-content:center; align-items:center; min-height:100vh; background:var(--bg); color:var(--text); font-family:system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
+      padding:20px;
+    }
+    .app{width:min(960px, 95vw);}
+    header{display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:22px; flex-wrap:wrap;}
+    h1{font-size:clamp(22px, 2vw + 12px, 34px); font-weight:700;}
+    .controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+    select, button{
+      background:var(--panel); color:var(--text); border:1px solid transparent; padding:10px 14px; border-radius:10px; box-shadow:var(--shadow); font-size:14px;
+    }
+    select:focus, button:focus{outline:none; box-shadow:0 0 0 3px var(--ring)}
+    button{cursor:pointer; transition: all .2s ease;}
+    button:hover{transform:translateY(-1px); background:rgba(88,166,255,0.08)}
+    .btn-secondary{background:transparent; border:1px solid var(--muted);}
+    .btn-danger{background:var(--danger); color:#fff; border:none;}
+    .status{margin:12px 0; font-size:15px; font-weight:500;}
+
+    .grid{
+      width:min(360px, 94vw); aspect-ratio:1/1; display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin:14px auto; 
+    }
+    .cell{
+      background:var(--panel); border:2px solid transparent; border-radius:14px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:clamp(42px, 8vw, 70px); cursor:pointer; transition:all .2s ease; box-shadow:var(--shadow);
+    }
+    .cell:hover{background:rgba(88,166,255,0.12);}
+    .cell.filled{cursor:not-allowed;}
+    .cell mark{color:var(--text);}
+    .win{border-color:var(--accent); box-shadow:0 0 0 4px var(--ring);}
+    .win mark{color:var(--accent);}
+
+    .score{display:flex; justify-content:center; gap:20px; margin-top:20px;}
+    .card{background:var(--panel); border-radius:12px; padding:14px 18px; box-shadow:var(--shadow); text-align:center; min-width:100px;}
+    .card h3{font-size:14px; color:var(--muted); margin-bottom:4px;}
+    .card .big{font-size:24px; font-weight:700;}
+
+    footer{margin-top:20px; color:var(--muted); font-size:13px; text-align:center}
+    a{color:var(--accent)}
+
+    @media (min-width: 860px){
+      .layout{display:flex; gap:32px; align-items:flex-start; justify-content:center;}
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app" data-theme="dark">
+    <header>
+      <h1>🎮 Tic‑Tac‑Toe</h1>
+      <div class="controls">
+        <select id="mode">
+          <option value="pvp">Player vs Player</option>
+          <option value="ai">Player vs AI</option>
+        </select>
+        <select id="starts">
+          <option value="X">X starts</option>
+          <option value="O">O starts</option>
+        </select>
+        <button id="undo" class="btn-secondary">⤺ Undo</button>
+        <button id="newRound" class="btn-secondary">New Round</button>
+        <button id="reset" class="btn-danger">Reset</button>
+        <button id="theme" class="btn-secondary">🌗 Theme</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <section>
+        <div class="status" id="status">Ready.</div>
+        <div class="grid" id="grid"></div>
+      </section>
+    </div>
+
+    <div class="score">
+      <div class="card"><h3>Player X</h3><div class="big" id="scoreX">0</div></div>
+      <div class="card"><h3>Draws</h3><div class="big" id="scoreDraw">0</div></div>
+      <div class="card"><h3>Player O</h3><div class="big" id="scoreO">0</div></div>
+    </div>
+
+    <footer>Made with ❤️ | <a href="#">Source</a></footer>
+  </div>
+
+  <script>
+    const grid = document.getElementById('grid');
+    const statusEl = document.getElementById('status');
+    const scoreXEl = document.getElementById('scoreX');
+    const scoreOEl = document.getElementById('scoreO');
+    const scoreDrawEl = document.getElementById('scoreDraw');
+    const startsEl = document.getElementById('starts');
+    const undoBtn = document.getElementById('undo');
+    const resetBtn = document.getElementById('reset');
+    const newRoundBtn = document.getElementById('newRound');
+    const themeBtn = document.getElementById('theme');
+
+    let board = Array(9).fill(null);
+    let history = [];
+    let current = startsEl.value;
+    let scores = { X:0, O:0, draw:0 };
+
+    const LINES = [
+      [0,1,2],[3,4,5],[6,7,8],
+      [0,3,6],[1,4,7],[2,5,8],
+      [0,4,8],[2,4,6]
+    ];
+
+    function render(){
+      grid.innerHTML = '';
+      board.forEach((val,i)=>{
+        const btn = document.createElement('button');
+        btn.className = 'cell'+(val? ' filled':'');
+        btn.innerHTML = val? `<mark>${val}</mark>`:'';
+        btn.onclick=()=>handleMove(i);
+        grid.appendChild(btn);
+      });
+    }
+
+    function handleMove(i){
+      if(board[i]||winner(board))return;
+      history.push([...board]);
+      board[i]=current;
+      current=current==='X'?'O':'X';
+      update();
+    }
+
+    function winner(b){
+      for(const [a,c,d] of LINES){
+        if(b[a]&&b[a]===b[c]&&b[a]===b[d]) return {player:b[a],line:[a,c,d]};
+      }
+      if(b.every(Boolean))return {player:'draw',line:[]};
+      return null;
+    }
+
+    function update(){
+      render();
+      const w=winner(board);
+      if(w){
+        if(w.player==='draw'){
+          statusEl.textContent='It\'s a draw!';
+          scores.draw++;
+        }else{
+          statusEl.textContent=`${w.player} wins!`;
+          scores[w.player]++;
+        }
+        updateScore();
+      }else{
+        statusEl.textContent=`${current}'s turn`;
+      }
+    }
+
+    function updateScore(){
+      scoreXEl.textContent=scores.X;
+      scoreOEl.textContent=scores.O;
+      scoreDrawEl.textContent=scores.draw;
+    }
+
+    undoBtn.onclick=()=>{
+      if(history.length){
+        board=history.pop();
+        current=current==='X'?'O':'X';
+        update();
+      }
+    };
+
+    resetBtn.onclick=()=>{
+      scores={X:0,O:0,draw:0};
+      board=Array(9).fill(null);
+      history=[];
+      updateScore();
+      update();
+    };
+
+    newRoundBtn.onclick=()=>{
+      board=Array(9).fill(null);
+      history=[];
+      current=startsEl.value;
+      update();
+    };
+
+    themeBtn.onclick=()=>{
+      const app=document.getElementById('app');
+      app.dataset.theme=app.dataset.theme==='dark'?'light':'dark';
+    };
+
+    startsEl.onchange=()=>{
+      newRoundBtn.click();
+    }
+
+    update();
+  </script>
+</body>
+</html>
